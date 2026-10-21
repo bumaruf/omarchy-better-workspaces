@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "bumaruf.better-workspaces",
+  "name": "Better Workspaces",
+  "version": "0.1.0",
+  "author": "bumaruf",
+  "description": "GNOME / COSMIC style dynamic workspaces: overview and bar indicators",
+  "kinds": [
+    "overlay",
+    "bar-widget"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "Overview.qml",
+    "barWidget": "Workspaces.qml"
+  },
+  "barWidget": {
+    "displayName": "Better Workspaces",
+    "description": "Dynamic workspace indicators",
+    "category": "Compositor",
+    "defaultSection": "left",
+    "allowMultiple": false
+  }
+}
