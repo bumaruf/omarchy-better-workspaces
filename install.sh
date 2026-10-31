@@ -71,4 +71,4 @@ if command -v omarchy-shell >/dev/null; then
   echo "Enabled $plugin_id"
 fi
 
-echo "Done. SUPER+` (key left of 1) opens the overview; SUPER+CTRL+UP/DOWN switches workspaces."
+echo "Done. SUPER+\` (key left of 1) opens the overview; SUPER+CTRL+UP/DOWN switches workspaces."
