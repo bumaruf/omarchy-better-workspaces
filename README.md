@@ -36,6 +36,9 @@ Then set your monitor order in `~/.config/hypr/workspaces.lua`.
 In the overview: `UP/DOWN` select, `RETURN` switch, `1..9` jump, `ESC` close; click a thumbnail
 to switch, click a window to focus it, middle-click to close it, drag it onto a thumbnail to move it (also across monitors), or hold it between two thumbnails
 to open a new workspace there. Drag a thumbnail to reorder workspaces.
+When there are more workspaces than fit on screen, hold a dragged window near the top or bottom
+of the strip to scroll it (mouse or touchpad), or use the wheel / a two-finger swipe anywhere
+in the overview while dragging.
 
 ## How it works
 

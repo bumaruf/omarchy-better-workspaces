@@ -57,6 +57,7 @@ Item {
     Hyprland.refreshToplevels()
     root.selected = root.activeLogical
     root.opened = true
+    root.revealSelected()
     root.run("o.better_workspaces.overview_opened()")
   }
 
@@ -240,7 +241,14 @@ Item {
 
   function step(direction) {
     root.selected = Math.max(1, Math.min(root.count, root.selected + direction))
+    root.revealSelected()
   }
+
+  // Asks every panel to scroll its strip so the selected thumbnail is visible.
+  signal revealSelected()
+
+  // True while a window or a workspace thumbnail is being dragged.
+  readonly property bool dragging: root.dragToplevel !== null || root.dragWorkspace > 0
 
   // Geometry in lastIpcObject only updates on refresh; keep it fresh while open.
   Timer {
@@ -348,6 +356,9 @@ Item {
           id: tileMouse
           anchors.fill: parent
           hoverEnabled: true
+          // Thumbnails live inside the scrollable strip; without this the
+          // Flickable takes over a vertical drag and cancels it.
+          preventStealing: true
           acceptedButtons: Qt.LeftButton | Qt.MiddleButton
 
           property point pressPoint
@@ -443,6 +454,10 @@ Item {
 
         var local = panel.contentItem.mapToItem(column, x, y)
         if (local.x < 0 || local.x >= column.width) return null
+        // Thumbnails scrolled out of view are clipped away; they are not targets.
+        // (Above the first one is still fine while the strip is at the top.)
+        if (local.y < strip.contentY && strip.contentY > 0) return null
+        if (local.y >= strip.contentY + strip.height && local.y < column.height) return null
         for (var i = 0; i < column.children.length; i++) {
           var child = column.children[i]
           if (child.modelData === undefined) continue
@@ -478,6 +493,20 @@ Item {
         MouseArea {
           anchors.fill: parent
           onClicked: root.dismiss()
+        }
+
+        // While dragging, the wheel or a two-finger swipe anywhere on the
+        // overview scrolls the strip, not only over the strip itself.
+        WheelHandler {
+          target: null
+          enabled: root.dragging
+          acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+          onWheel: function(event) {
+            var delta = event.pixelDelta.y !== 0
+              ? event.pixelDelta.y
+              : event.angleDelta.y / 120 * panel.thumbHeight * 0.5
+            panel.scrollStrip(-delta)
+          }
         }
       }
 
@@ -518,6 +547,60 @@ Item {
       readonly property real stripWidth: Math.round(panel.width * 0.14)
       readonly property real thumbHeight: Math.round(stripWidth * aspect)
 
+      // Scrolls the strip by `delta` pixels, clamped to its content.
+      function scrollStrip(delta) {
+        var max = Math.max(0, strip.contentHeight - strip.height)
+        strip.contentY = Math.max(0, Math.min(max, strip.contentY + delta))
+      }
+
+      // Brings thumbnail n fully into view.
+      function revealThumb(n) {
+        for (var i = 0; i < column.children.length; i++) {
+          var child = column.children[i]
+          if (child.modelData !== n) continue
+          var top = child.y + child.gapHeight
+          var bottom = top + panel.thumbHeight
+          if (top < strip.contentY) panel.scrollStrip(top - strip.contentY)
+          else if (bottom > strip.contentY + strip.height) panel.scrollStrip(bottom - strip.contentY - strip.height)
+          return
+        }
+      }
+
+      Connections {
+        target: root
+        function onRevealSelected() { Qt.callLater(panel.revealThumb, root.selected) }
+      }
+
+      // Edge auto-scroll while dragging. Holding the pointer (mouse or
+      // touchpad) near the top or bottom of the strip, or past it in the
+      // margin, scrolls towards workspaces that do not fit on screen; the
+      // closer to the edge, the faster.
+      readonly property real edgeZone: Math.max(40, panel.thumbHeight * 0.4)
+      readonly property real edgeSpeed: Math.max(8, panel.thumbHeight / 10)
+
+      function edgeVelocity(point) {
+        var x = point.x - panel.modelData.x
+        var y = point.y - panel.modelData.y
+        if (x < 0 || y < 0 || x >= panel.width || y >= panel.height) return 0
+        if (x > strip.x + strip.width + panel.margin) return 0
+        var intoTop = strip.y + panel.edgeZone - y
+        var intoBottom = y - (strip.y + strip.height - panel.edgeZone)
+        var depth = intoTop > 0 ? intoTop : intoBottom > 0 ? intoBottom : 0
+        if (depth <= 0) return 0
+        var speed = panel.edgeSpeed * Math.max(0.15, Math.min(1, depth / panel.edgeZone))
+        return intoTop > 0 ? -speed : speed
+      }
+
+      Timer {
+        interval: 16
+        repeat: true
+        running: root.opened && root.dragging && strip.contentHeight > strip.height
+        onTriggered: {
+          var velocity = panel.edgeVelocity(root.dragPoint)
+          if (velocity !== 0) panel.scrollStrip(velocity)
+        }
+      }
+
       // Workspace strip.
       Flickable {
         id: strip
@@ -527,6 +610,11 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         contentHeight: column.implicitHeight
         clip: true
+        boundsBehavior: Flickable.StopAtBounds
+
+        // Thumbnails slide under a stationary pointer while scrolling, so the
+        // drop target has to be looked up again.
+        onContentYChanged: if (root.dragging) root.dragMove(root.dragPoint)
 
         Column {
           id: column
@@ -603,6 +691,7 @@ Item {
                   id: cardMouse
                   anchors.fill: parent
                   hoverEnabled: true
+                  preventStealing: true
 
                   property point pressPoint
                   property bool dragging: false
